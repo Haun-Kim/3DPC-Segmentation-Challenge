@@ -8,9 +8,9 @@
 
 ![Dataset](assets/figures/nubjuki.png)
 
-## What to Do
+## What to Do — Find Nubzukis!
 
-In this challenge, your task is **single-category 3D point cloud instance segmentation**.
+In this competition, your mission is to detect and segment **Nubzukis** in 3D scenes. You'll need to train a 3D segmentation neural network that takes a point cloud with color information as input and predicts indices of points for one or multiple instances of Nubzukis. It is a **single-category 3D point cloud instance segmentation** task.
 
 For each scene point cloud, predict a point-wise instance label:
 
@@ -27,7 +27,7 @@ This means:
 - the key task is to correctly separate background and multiple target instances,
 - matching between predictions and ground truth is permutation-invariant (handled in the evaluator).
 
-We provide the dataset format and a fixed evaluator. Your job is to improve the model in `training/model.py`.
+We provide the dataset format and a fixed evaluator. Your job is to improve the model in `model.py`.
 
 **Important Notes**
 
@@ -108,7 +108,7 @@ You can also download the MultiScan benchmark dataset by following the instructi
 
 ## Generation Pipeline for Test Data
 
-For each generated scene:
+Each test scene will be generated using the following procedure. For each scene:
 - a random number of objects is inserted (`min=1`, `max=5`)
 - mesh placement is attempted with multiple scale ratios (range: `0.025` to `0.2` of the scene diagonal)
 - an object may be placed on top of another object, with partial overhang allowed
@@ -117,6 +117,8 @@ Once the object is placed, the point cloud is extracted with the following augme
 - anisotropic scaling: each of the x, y, and z axes is independently scaled within the range `(0.5, 1.5)`
 - affine transform: rotation around the x,y,z-axis in the range `(-180, 180)`
 - color map jittering
+
+Note that simulating similar object insertion and augmentation procedures during training is allowed.
 
 ## Test Data Format
 
@@ -132,36 +134,30 @@ We will also provide example test data.
 
 ## Evaluation
 
-We evaluate instance segmentation results on the generated test data using the following metric.
+Instance segmentation results are evaluated on the generated test set using two metrics: `F1@0.25`($F1_{0.25}$) and `F1@0.50`($F1_{0.50}$). 
 
-Instance evaluation uses Hungarian matching based on point-level IoU between predicted and ground-truth instances.
+For each scene, we first convert the predicted instance labels and ground-truth instance labels into binary instance masks, one mask per object instance. We then compute the pairwise IoU matrix between all predicted and ground-truth instances.
 
-- For each scene:
-  - Convert point-wise instance labels (`id > 0`) into binary instance masks.
-  - Compute the pairwise IoU matrix between predicted and GT masks.
-  - Run Hungarian matching (1-to-1 assignment) using cost `1 - IoU`.
-  - For each IoU threshold $\tau$, count:
-    - $TP_\tau$: matched pairs with $IoU \ge \tau$
-    - $FP_\tau$: predicted instances not counted as TP
-    - $FN_\tau$: GT instances not counted as TP
+Using this IoU matrix, we perform Hungarian matching (1-to-1 assignment) with cost `1 - IoU`. For a given IoU threshold $\tau$, we define:
 
-- For each threshold $\tau$, compute:
+- $TP_\tau$: matched pairs with $IoU \ge \tau$
+- $FP_\tau$: predicted instances not counted as TP
+- $FN_\tau$: GT instances not counted as TP
+
+For each threshold, TP, FP, and FN are aggregated over all scenes. Then, the F1 score is computed for all scenes as follows:
 
 ```math
 \text{F1}_{\tau} = \frac{2 \text{TP}_{\tau}}{2 \text{TP}_{\tau} + \text{FP}_{\tau} + \text{FN}_{\tau}}
 ```
 
-  where $TP_\tau$, $FP_\tau$, and $FN_\tau$ are aggregated over all scenes.
-
-- We will evaluate two thresholds: `F1@0.25`($F1_{0.25}$) and `F1@0.50`($F1_{0.50}$).
+The F1 scores with two different thresholds, 0.25 and 0.50, must be reported: `F1@0.25`($F1_{0.25}$) and `F1@0.50`($F1_{0.50}$).
 
 **Note**: Predicted instance IDs are valid only in `1..100`. Any predicted ID greater than `100` is remapped to background (`0`) before scoring.
 
 More details about the evaluation metrics are provided in `evaluate.py`.
 
-- The TAs provide the reference scores computed using their own implementation as reference values (the code will not be released). You are expected to match or exceed these reference values.
 - Additionally, to help everyone gauge progress, there will be a [Mid-Term Evaluation](#mid-term-evaluation-submission-optional) where teams can submit intermediate results.
-- **Final grading will be determined relative to the best score achieved for each task.** Specifically, the score for each task is computed as follows:
+- **Final grading will be determined relative to the best score achieved for each metric (`F1@0.25` and `F1@0.50`).** Specifically, the score for each metric is computed as follows:
 
   ```math
   \mathrm{Score} = \max\left(\cfrac{\mathrm{Your\,Score}}{\mathrm{Highest\,Score}} \times 8, 0\right)
@@ -170,19 +166,15 @@ More details about the evaluation metrics are provided in `evaluate.py`.
 - If your score equals the highest score, you receive 8 points for that task.
 
 - Bonus credits for each task:
-  - **Mid-Term Evaluation Bonus**: Every team that outperforms the TA’s score in the mid-term evaluation receives +1.0 point for that task.
+  - **Mid-Term Evaluation Bonus**: Top-k teams for each metric will receive +1.0 point toward the final grade.
   - **Winner Bonus**: If your team achieves the highest score for a task, you receive +1.0 point for that task.
 
 - In total, the 3D Point Cloud Segmentation Challenge is worth a maximum of 20 points.
 
 ## Mid-Term Evaluation Submission (Optional)
 
-The purpose of the mid-term evaluation is to help teams gauge their progress relative to others. **Participation is optional**, but the top-k teams for each task that outperform the TAs’ scores will receive **bonus credit** toward the final grade.
+The purpose of the mid-term evaluation is to help teams gauge their progress. Participation is optional, but the top-k teams for each metric will receive bonus credit toward the final grade.
 
-| Metric | TA Score |
-|---|---:|
-| `F1@0.25` | 0.3853 |
-| `F1@0.50` | 0.1546 |
 
 - **What to submit**
   1. **Self-contained source code**
@@ -216,6 +208,7 @@ The purpose of the mid-term evaluation is to help teams gauge their progress rel
 ## Grading
 
 **There are no late days. Submit on time.**  
+
 **Late submission**: Zero score.  
 **Missing any required item in the final submission (qualitative results, code/checkpoint, or write-up)**: Zero score.  
 **Missing items in the write-up**: 10% penalty for each. 
