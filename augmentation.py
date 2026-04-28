@@ -36,7 +36,7 @@ def nub_sqz(mesh, scene_diag):
     mesh.apply_translation([-center[0],-center[1],-z_min])
     
     im = np.random.uniform(0,1)
-    scale_ratio = 0.025 + 0.175 * (im ** 1.5) # Scale은 큰 것 보다 작은게 더 자주 발생하도록 함.
+    scale_ratio = 0.025 + 0.175 * (im ** 1.0)
     
     sqz_ratio = np.random.uniform(0.5,1.5,size=3)
     angle = np.random.uniform(-180,180,size=3)
@@ -303,8 +303,8 @@ def find_place(nub_xyz,nub_normal,scene_xyz,scene_normal,scene_label,scene_diag,
     scene_min = scene_xyz.min(dim=0)[0]
     scene_max = scene_xyz.max(dim=0)[0]
     
-    b = 100
-    for _ in range(1000//b):
+    b = 256
+    for _ in range(1024 // b):
         #바닥에 너무 많이 깔리는 문제가 있어서 전체 랜덤이 아니라, 일단 z에 대해서 랜덤으로 뽑는 방식으로 바꿈.
         b_candidate_point = torch.unique(b_candidate_point,dim=0)
         if(len(b_candidate_point) == 0):
@@ -450,9 +450,10 @@ def process_all(data_dir, output_dir, num_copy = 1):
     #   제미나이한테 맡겨서 문제 있을 수도 이슴
     ########################################################
     os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(os.path.join(output_dir, 'npy'), exist_ok=True)
-    os.makedirs(os.path.join(output_dir, 'png'), exist_ok=True)
-    os.makedirs(os.path.join(output_dir, 'ply'), exist_ok=True)
+    if DEBUG == True:
+        os.makedirs(os.path.join(output_dir, 'npy'), exist_ok=True)
+        os.makedirs(os.path.join(output_dir, 'png'), exist_ok=True)
+        os.makedirs(os.path.join(output_dir, 'ply'), exist_ok=True)
     pth_files = glob.glob(os.path.join(data_dir, '*.pth'))
     
     print(f"총 {len(pth_files)}개의 .pth 파일을 찾았습니다. 처리를 시작합니다.")
@@ -464,19 +465,29 @@ def process_all(data_dir, output_dir, num_copy = 1):
         file_name = os.path.basename(pth_path)
         base_name = os.path.splitext(file_name)[0]
         # 원본과 구분하기 위해 _aug 접미사 추가
-        output_npy_path = os.path.join(output_dir, 'npy', f"{base_name}_aug.npy")
-        output_png_path = os.path.join(output_dir, 'png', f"{base_name}_aug.png")
-        output_ply_path = os.path.join(output_dir, 'ply', f"{base_name}_aug.ply")
+        if DEBUG == True:
+            output_npy_path = os.path.join(output_dir, 'npy', f"{base_name}_aug.npy")
+            output_png_path = os.path.join(output_dir, 'png', f"{base_name}_aug.png")
+            output_ply_path = os.path.join(output_dir, 'ply', f"{base_name}_aug.ply")
+        else:
+            output_npy_path = os.path.join(output_dir, f"{base_name}.npy")
+            
         glb_path = 'assets/sample.glb'
         
         print(f"[{idx+1}/{len(pth_files)}] 처리 중: {file_name} -> {base_name}_aug.npy", end=" ... ")
         
         try:
             for i in range(1,1+num_copy):
-                output_npy_path_ = output_npy_path.replace('_aug.npy', f'_{i}.npy')
-                output_png_path_ = output_png_path.replace('_aug.png', f'_{i}.png')
-                output_ply_path_ = output_ply_path.replace('_aug.ply', f'_{i}.ply')
+                if DEBUG:
+                    output_npy_path_ = os.path.join(output_dir, 'npy', f"{base_name}_{i}.npy")
+                    output_png_path_ = os.path.join(output_dir, 'png', f"{base_name}_{i}.png")
+                    output_ply_path_ = os.path.join(output_dir, 'ply', f"{base_name}_{i}.ply")
+                else:
+                    output_npy_path_ = os.path.join(output_dir, f"{base_name}_{i}.npy")
+                    output_ply_path_ = None
+                    
                 generate_nubscene(pth_path, glb_path, output_npy_path_,output_ply_path_)
+                
                 if DEBUG == True:
                     visualize_from_file(
                         data_npy_path=output_npy_path_,
@@ -497,10 +508,11 @@ def process_all(data_dir, output_dir, num_copy = 1):
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize original scene point cloud.")
-    parser.add_argument("--data-pth", type=str,default=None, required=False, help="Path to one *_aug.npy scene file")
+    parser.add_argument("--data-pth", type=str,default=None, required=False, help="Path to dir of dply data")
+    parser.add_argument("--data-ply", type=str,default=None, required=False, help="Path to one ply")
     parser.add_argument("--out-pth", type=str,default=None, required=False, help="Path to output")
     parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--num_scene", type=int,default=1, required=False, help="number of scenes per one ply file")
+    parser.add_argument("--num-scene", type=int,default=1, required=False, help="number of scenes per one ply file")
     
     args = parser.parse_args()
     nub_pth = 'assets/sample.glb'
@@ -508,16 +520,16 @@ def main():
     DEBUG = args.debug
     n = args.num_scene
     
-    if args.data_pth is None:
-        data_dir = 'data'
-        output_dir = 'output'
+    if args.data_ply is None:
+        data_dir = args.data_pth
+        output_dir = args.out_pth
         process_all(data_dir, output_dir,n)
         return 
     test_output_dir = 'test_output'
     os.makedirs(test_output_dir, exist_ok=True) # 추가
     test_output = 'test_output/out'
     nub_pth = 'assets/sample.glb'
-    generate_nubscene(args.data_pth,nub_pth,test_output,'test_output/out.ply')
+    generate_nubscene(args.data_ply,nub_pth,test_output,'test_output/out.ply')
     visualize_from_file(
         data_npy_path='test_output/out.npy',
         output_path='test_output/out.png',
